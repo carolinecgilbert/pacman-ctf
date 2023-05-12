@@ -83,8 +83,7 @@ class GhostAgent(CaptureAgent):
         self.pointToGoTo = existingFoodPositions[1]
 
 
-
-    def chooseAction(self, gameState):
+    def ghost_action(self, gameState):
       startTime = time.time()
 
       enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
@@ -125,15 +124,19 @@ class GhostAgent(CaptureAgent):
 
       """ ----------------------------------------------------- """
 
-
       while time.time() - startTime < 0.1:
         pass
 
       self.currentMissionCounter += 1
       self.previouselyExistingFood = self.getFoodYouAreDefending(gameState).asList()
 
-      # print(self.currentMission, self.currentMissionCounter)
       return self.bestActionToGetToPoint(gameState, self.pointToGoTo)
+
+
+
+    def chooseAction(self, gameState):
+      return self.ghost_action(gameState)
+      
 
 
 
