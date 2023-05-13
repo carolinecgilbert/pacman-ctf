@@ -51,7 +51,7 @@ def createTeam(firstIndex, secondIndex, isRed,
 #               #
 #################
 
-DEPTH = 30 # adversarial search tree depth
+DEPTH = int(4) # adversarial search tree depth
 
 class DynamicAgent(CaptureAgent):
   """
@@ -75,9 +75,11 @@ class DynamicAgent(CaptureAgent):
     indices = []
     if (gameState.isOnRedTeam(self.index)):
       indices = gameState.getRedTeamIndices()
+      self.enemyIndices = gameState.getBlueTeamIndices()
     
     else:
       indices = gameState.getBlueTeamIndices()
+      self.enemyIndices = gameState.getRedTeamIndices()
 
     defensiveIndex = min(indices)
     offensiveIndex = max(indices)
@@ -122,6 +124,7 @@ class DynamicAgent(CaptureAgent):
       return successor.generateSuccessor(self.index, action)
     else:
       return successor
+  
     
   
   
@@ -164,41 +167,58 @@ class SwitchAgent(DynamicAgent):
     return possibleActions[chosenIndex]
 
   def expectimax(self, agent, depth, gameState):
-
     if gameState.isOver() or depth == self.depth:
-        return max(self.getSuccessor(gameState, action) for action in gameState.getLegalActions(self.index))
+        actions = gameState.getLegalActions(self.index)
+        max_score = -float('inf')
+        for action in actions:
+            score = self.evaluate(gameState,action)
+            max_score = max(max_score, score)
+
+        return max_score
 
     if agent == self.index:  # maximize for our team
-        return max(self.expectimax(agent+1, depth, self.getSuccessor(gameState, action)) for action in gameState.getLegalActions(self.index))
+        actions = gameState.getLegalActions(agent)
+        max_score = -float('inf')
+        for action in actions:
+            successor = self.getSuccessor(gameState, action)
+            score = self.expectimax((agent + 1) % gameState.getNumAgents(), depth, successor)
+            max_score = max(max_score, score)
+
+        return max_score
 
     else:  # minimize for other team
-        if gameState.getNumAgents() == agent:
-            agent = 0
-            depth += 1
-
-        if (not gameState.getAgentState(agent).isPacman) and (gameState.getAgentPosition(agent) is not None):  # minimize for ghosts
-            ghost_state = gameState.getAgentState(agent)
-            ghost_pos = ghost_state.getPosition()
-            actions = gameState.getLegalActions(self.index)
-            if Directions.STOP in actions and len(actions)>1:
-                actions.remove(Directions.STOP)
-            min_dist = float("inf")
-            bestAction = actions[0]
+        if (not gameState.getAgentState(agent).isPacman) and (gameState.getAgentPosition(agent) is tuple):  # minimize for ghosts
+            actions = gameState.getLegalActions(agent)
+            num_actions = len(actions)
+            min_score = float('inf')
             for action in actions:
                 successor = self.getSuccessor(gameState, action)
-                pos2 = successor.getAgentState(agent).getPosition()
-                dist = self.getMazeDistance(ghost_pos, pos2)
-                if dist < min_dist:
-                  bestAction = action
-                  min_dist = dist
-            if min_dist <= 1:
-                return -float("inf")
-            return sum(self.expectimax(agent+1, depth, self.getSuccessor(gameState, bestAction)) for action in actions) / float(len(actions))
+                score = self.expectimax((agent + 1) % gameState.getNumAgents(), depth, successor)
+                min_score = min(min_score, score)
+
+            return min_score
 
         else:  # ignore Pacman agents
-            actions = gameState.getLegalActions(self.index)
-            action = random.choice(actions)
-            return self.evaluate(gameState, action)
+            if gameState.getAgentPosition(agent) is tuple:
+              avg_score = 0
+              for action in actions:
+                  successor = self.getSuccessor(gameState, action)
+                  score = self.expectimax((agent + 1) \
+                                          % gameState.getNumAgents(), depth,  successor)
+                  avg_score += score
+
+              return avg_score / num_actions
+            
+            else: 
+                actions = gameState.getLegalActions(self.index)
+                max_score = -float('inf')
+                for action in actions:
+                    successor = self.getSuccessor(gameState, action)
+                    score = self.expectimax((self.index + 1) % gameState.getNumAgents(),depth+1, successor)
+                    max_score = max(max_score, score)
+
+                return max_score
+            
 
   
   ###############
