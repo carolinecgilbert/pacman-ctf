@@ -51,7 +51,7 @@ def createTeam(firstIndex, secondIndex, isRed,
 #               #
 #################
 
-DEPTH = int(4) # adversarial search tree depth
+DEPTH = int(11) # adversarial search tree depth
 
 class DynamicAgent(CaptureAgent):
   """
@@ -94,7 +94,11 @@ class DynamicAgent(CaptureAgent):
     """
     features = self.getFeatures(gameState, action)
     weights = self.getWeights(gameState, action)
-    return features * weights
+    currPos = gameState.getAgentPosition(self.index)
+    successor = self.getSuccessor(gameState,action)
+    newPos = successor.getAgentPosition(self.index)
+    penalty = self.punishBackAndForth(self.index, newPos, currPos, 0)
+    return features * weights * penalty
   
   def getFeatures(self, gameState, action):
     features = util.Counter()
@@ -111,7 +115,7 @@ class DynamicAgent(CaptureAgent):
     return features
 
   def getWeights(self, gameState, action):
-    return {'successorScore': 100, 'distanceToFood': -1}
+    return {'successorScore': 100, 'distanceToFood': 10000}
   
   def getSuccessor(self, gameState, action):
     """
@@ -124,8 +128,19 @@ class DynamicAgent(CaptureAgent):
       return successor.generateSuccessor(self.index, action)
     else:
       return successor
-  
     
+  def punishBackAndForth(self, agent, position, prev_position, penalty):
+    if agent == self.index:
+        if position == prev_position:
+            return -penalty
+    return 0
+    
+  def removeStopFromActions(self, actions):
+      if 'Stop' in actions:
+        actions.remove('Stop')
+      return actions
+              
+  
   
   
 class SwitchAgent(DynamicAgent):
@@ -139,11 +154,96 @@ class SwitchAgent(DynamicAgent):
     # Expectimax
       if (gameState.getAgentState(self.index).isPacman):
         #print("Expectimax Agent")
-        return self.chooseActionExpectimax(gameState)
+        return self.chooseActionAlphaBeta(gameState)
 
       else:
         #print("Reflex Agent")
         return self.chooseActionReflex(gameState)
+      
+      
+  ##############
+  #            #
+  # ALPHA-BETA # 
+  #            #
+  ##############
+
+  def chooseActionAlphaBeta(self, gameState):
+    
+    """
+    Chooses pacman action based on alpha-beta pruning expectimax with DEPTH
+    """
+    possibleActions = gameState.getLegalActions(self.index)
+    possibleActions = self.removeStopFromActions(possibleActions)
+    action_scores = [self.alpha_beta(0, 0, self.getSuccessor(gameState,action),float('inf'),-float('inf')) for action in possibleActions]
+
+    max_action = max(action_scores)
+    max_indices = [index for index in range(len(action_scores)) if action_scores[index] == max_action]
+
+    chosenIndex = random.choice(max_indices)
+
+    return possibleActions[chosenIndex]
+  
+  def alpha_beta(self, agent, depth, gameState, alpha, beta):
+    if gameState.isOver() or depth == self.depth:
+        actions = gameState.getLegalActions(self.index)
+        actions = self.removeStopFromActions(actions)
+        max_score = -float('inf')
+        for action in actions:
+            score = self.evaluate(gameState, action)
+            max_score = max(max_score, score)
+        return max_score
+
+    if agent == self.index:  # maximize for our team
+        actions = gameState.getLegalActions(agent)
+        actions = self.removeStopFromActions(actions)
+        max_score = -float('inf')
+        for action in actions:
+            successor = self.getSuccessor(gameState, action)
+            score = self.alpha_beta((agent + 1) % gameState.getNumAgents(), depth, successor, alpha, beta)
+            max_score = max(max_score, score)
+            alpha = max(alpha, max_score)
+            if beta <= alpha:
+                break  # beta cut-off
+        return max_score
+
+    else:  # minimize for other team
+        if (not gameState.getAgentState(agent).isPacman) and (gameState.getAgentPosition(agent) is tuple):  # minimize for ghosts
+            actions = gameState.getLegalActions(agent)
+            actions = self.removeStopFromActions(actions)
+            min_score = float('inf')
+            for action in actions:
+                successor = self.getSuccessor(gameState, action)
+                score = self.alpha_beta((agent + 1) % gameState.getNumAgents(), depth, successor, alpha, beta)
+                min_score = min(min_score, score)
+                beta = min(beta, min_score)
+                if beta <= alpha:
+                    break  # alpha cut-off
+            return min_score
+
+        else:  # ignore Pacman agents
+            if gameState.getAgentPosition(agent) is tuple:
+                actions = gameState.getLegalActions(agent)
+                actions = self.removeStopFromActions(actions)
+                avg_score = 0
+                for action in actions:
+                    successor = self.getSuccessor(gameState, action)
+                    score = self.alpha_beta((agent + 1) % gameState.getNumAgents(), depth, successor, alpha, beta)
+                    avg_score += score
+                return avg_score / len(actions)
+            
+            else:  # ghost is scared or has just died
+                actions = gameState.getLegalActions(self.index)
+                actions = self.removeStopFromActions(actions)
+                max_score = -float('inf')
+                for action in actions:
+                    successor = self.getSuccessor(gameState, action)
+                    score = self.alpha_beta((self.index + 1) % gameState.getNumAgents(), depth+1, successor, alpha, beta)
+                    max_score = max(max_score, score)
+                    alpha = max(alpha, max_score)
+                    if beta <= alpha:
+                        break  # beta cut-off
+                return max_score
+
 
   ###############
   #             #
