@@ -93,6 +93,8 @@ class DynamicAgent(CaptureAgent):
     self.isDefense = self.index==defensiveIndex
     self.isOffense = self.index==offensiveIndex
 
+    self.BOTH_ARE_DEFENSE = False
+
   def returnToHome(self, gameState):
      '''Go back to home side if carrying certain percentage of pellets'''
      threshold = 0.05 * len(self.getFood(gameState).asList())
@@ -631,37 +633,68 @@ class SwitchAgent(DynamicAgent):
     return point_exists
      
 
-  def patrolFood(self, gameState):
+  def patrolFood(self, gameState, should_guard_everything_even_though_we_are_two=False):
       if self.currentMission != "PATROL":
         self.currentMission = "PATROL"
         self.currentMissionCounter = 0
 
       existingFoodPositions = self.getFoodYouAreDefending(gameState).asList()
-      # existingFoodPositions.sort(key=lambda x: abs(x[0] - self.middleX))
 
-      if len(existingFoodPositions) > 0:
-        food_y_coordinates = [coord[1] for coord in existingFoodPositions]
-        max_y = min(max(food_y_coordinates), gameState.data.layout.height - 5)
-        min_y = max(min(food_y_coordinates), 5)
+      if not self.BOTH_ARE_DEFENSE or should_guard_everything_even_though_we_are_two:
+        if len(existingFoodPositions) > 0:
+          food_y_coordinates = [coord[1] for coord in existingFoodPositions]
+          max_y = min(max(food_y_coordinates), gameState.data.layout.height - 5)
+          min_y = max(min(food_y_coordinates), 5)
 
-        pointToGoTo = [self.middleX, min_y]
-        while not self.point_exists(tuple(pointToGoTo), gameState.getAgentPosition(self.index)):
-          if self.start[0] < self.middleX:
-            pointToGoTo[0] -= 1
-          else:
-             pointToGoTo[0] += 1
-
-        self.pointToGoTo = tuple(pointToGoTo)
-        if gameState.getAgentPosition(self.index) == self.pointToGoTo:
-          pointToGoTo = [self.middleX, max_y]
+          pointToGoTo = [self.middleX, min_y]
           while not self.point_exists(tuple(pointToGoTo), gameState.getAgentPosition(self.index)):
             if self.start[0] < self.middleX:
               pointToGoTo[0] -= 1
             else:
               pointToGoTo[0] += 1
 
-        
-        self.pointToGoTo = tuple(pointToGoTo)
+          self.pointToGoTo = tuple(pointToGoTo)
+          if gameState.getAgentPosition(self.index) == self.pointToGoTo:
+            pointToGoTo = [self.middleX, max_y]
+            while not self.point_exists(tuple(pointToGoTo), gameState.getAgentPosition(self.index)):
+              if self.start[0] < self.middleX:
+                pointToGoTo[0] -= 1
+              else:
+                pointToGoTo[0] += 1
+
+          
+          self.pointToGoTo = tuple(pointToGoTo)
+      
+      else:
+        if len(existingFoodPositions) > 0:
+          if self.isOffense:
+            max_y = gameState.data.layout.height - 5
+            min_y = gameState.data.layout.height // 2
+          else:
+            max_y = (gameState.data.layout.height // 2) - 1
+            min_y = 5
+             
+
+          pointToGoTo = [self.middleX, min_y]
+          while not self.point_exists(tuple(pointToGoTo), gameState.getAgentPosition(self.index)):
+            if self.start[0] < self.middleX:
+              pointToGoTo[0] -= 1
+            else:
+              pointToGoTo[0] += 1
+
+          self.pointToGoTo = tuple(pointToGoTo)
+          if gameState.getAgentPosition(self.index) == self.pointToGoTo:
+            pointToGoTo = [self.middleX, max_y]
+            while not self.point_exists(tuple(pointToGoTo), gameState.getAgentPosition(self.index)):
+              if self.start[0] < self.middleX:
+                pointToGoTo[0] -= 1
+              else:
+                pointToGoTo[0] += 1
+
+
+          self.pointToGoTo = tuple(pointToGoTo)
+
+      
 
 
   def chooseActionDefensiveBehaviour(self, gameState):
@@ -674,22 +707,16 @@ class SwitchAgent(DynamicAgent):
       foodEaten = list(set(self.previouselyExistingFood) - set(self.getFoodYouAreDefending(gameState).asList()))
 
       """ ------------------- Behavior Tree ------------------- """
-      if gameState.getAgentState(self.index).scaredTimer > 0: # If scared, invade!
-        # Expectimax/Alpha-beta offense for pacman
+      if gameState.getAgentState(self.index).scaredTimer > 0:
+        # If scared, invade!
         if (gameState.getAgentState(self.index).isPacman):
           action = self.returnToHome(gameState)
           if action is not None:
             return action
           else:
             return self.chooseActionAlphaBeta(gameState)
-            #return self.chooseActionExpectimax(gameState)
-
-        # Reflex offense for ghost
         else:
           return self.chooseActionReflex(gameState)
-
-
-
 
       if len(invaders) != 0:
         if len(seenInvaders) != 0: # Invader exists, and is visible -> chase invader
@@ -704,32 +731,34 @@ class SwitchAgent(DynamicAgent):
               self.currentMission = "GO TO EATEN FOOD"
               self.currentMissionCounter = 0
             self.pointToGoTo = foodEaten[0]
-
+            
           else:
             if len(self.getCapsulesYouAreDefending(gameState)) != 0: # Invader exists, is not visible -> try go guard capsule
               if self.currentMission != "GUARD CAPSULE":
                 self.currentMission = "GUARD CAPSULE"
                 self.currentMissionCounter = 0
-              self.pointToGoTo = self.getCapsulesYouAreDefending(gameState)[0]
+              capsules = self.getCapsulesYouAreDefending(gameState)
+              capsules.sort(key=lambda x: abs(x[0] - self.middleX))
+              if self.BOTH_ARE_DEFENSE and self.isOffense and len(capsules) >= 2:
+                self.pointToGoTo = capsules[1]
+              
+              elif self.BOTH_ARE_DEFENSE and self.isOffense and len(capsules) == 1:
+                if self.currentMission != "PATROL" or  gameState.getAgentPosition(self.index) == self.pointToGoTo: # No need for both to guard the same capsule -> guard food
+                  self.patrolFood(gameState, should_guard_everything_even_though_we_are_two=True)
 
+              else:
+                self.pointToGoTo = capsules[0]
+              
 
             elif self.currentMission != "PATROL" or  gameState.getAgentPosition(self.index) == self.pointToGoTo: # Invader exists, is not visible, capsule don't exist -> guard food
-              self.patrolFood(gameState)
+              self.patrolFood(gameState, )
 
       elif self.currentMission != "PATROL" or  gameState.getAgentPosition(self.index) == self.pointToGoTo:
         self.patrolFood(gameState)
 
-      """elif len(seenGhosts) != 0:
-         if self.currentMission != "MIRROR GHOST":
-            self.currentMission = "MIRROR GHOST"
-            self.currentMissionCounter = 0
-          self.pointToGoTo = invaders[0]"""
 
       """ ----------------------------------------------------- """
 
-      """while time.time() - startTime < 0.1:
-        pass
-      """
       self.currentMissionCounter += 1
       self.previouselyExistingFood = self.getFoodYouAreDefending(gameState).asList()
       return self.bestActionToGetToPoint(gameState, self.pointToGoTo)
