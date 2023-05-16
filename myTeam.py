@@ -71,7 +71,6 @@ class DynamicAgent(CaptureAgent):
     self.middleX = gameState.data.layout.width // 2
     if self.start[0] < self.middleX:
       self.middleX -= 1
-    print(self.middleX)
     
     self.previouselyExistingFood = \
       self.getFoodYouAreDefending(gameState).asList()
@@ -90,10 +89,10 @@ class DynamicAgent(CaptureAgent):
     defensiveIndex = min(indices)
     offensiveIndex = max(indices)
 
-    self.isDefense = self.index==defensiveIndex
+    self.isDefense = self.index==defensiveIndex or self.index==offensiveIndex
     self.isOffense = self.index==offensiveIndex
 
-    self.BOTH_ARE_DEFENSE = False
+    self.BOTH_ARE_DEFENSE = True
 
   def returnToHome(self, gameState):
      '''Go back to home side if carrying certain percentage of pellets'''
@@ -723,7 +722,10 @@ class SwitchAgent(DynamicAgent):
           if self.currentMission != "CHASE":
             self.currentMission = "CHASE"
             self.currentMissionCounter = 0
-          self.pointToGoTo = invaders[0]
+          if self.BOTH_ARE_DEFENSE and self.isOffense and len(seenInvaders) >= 2:
+            self.pointToGoTo = seenInvaders[1]
+          else:
+            self.pointToGoTo = seenInvaders[0]
         
         else: 
           if len(foodEaten) != 0: # Invader exists, is not visible, but food has been eaten -> go to eaten food
