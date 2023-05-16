@@ -52,7 +52,7 @@ def createTeam(firstIndex, secondIndex, isRed,
 #               #
 #################
 
-DEPTH = int(15) # adversarial search tree depth
+DEPTH = int(8) # adversarial search tree depth
 
 class DynamicAgent(CaptureAgent):
   """
@@ -352,6 +352,7 @@ class SwitchAgent(DynamicAgent):
            return action
         else:
            return self.chooseActionAlphaBeta(gameState)
+           #return self.chooseActionExpectimax(gameState)
 
       # Reflex offense for ghost
       else:
@@ -382,17 +383,20 @@ class SwitchAgent(DynamicAgent):
   
   def alpha_beta(self, agent, depth, gameState, alpha, beta):
     if gameState.isOver() or depth == self.depth:
-        actions = gameState.getLegalActions(self.index)
-        actions = self.removeStopFromActions(actions)
+        actions = self.getOrderedActions(gameState)
+        #actions = self.removeStopFromActions(actions)
         max_score = -float('inf')
         for action in actions:
             score = self.evaluate(gameState, action)
             max_score = max(max_score, score)
+            successor = self.getSuccessor(gameState,action)
+            actionPos = gameState.getAgentPosition(self.index)
+            self.debugDraw(actionPos,[0.0, 1.0, 0.0],True)
         return max_score
 
     if agent == self.index:  # maximize for our team
-        actions = gameState.getLegalActions(agent)
-        actions = self.removeStopFromActions(actions)
+        actions = self.getOrderedActions(gameState)
+        #actions = self.removeStopFromActions(actions)
         max_score = -float('inf')
         for action in actions:
             successor = self.getSuccessor(gameState, action)
@@ -405,8 +409,9 @@ class SwitchAgent(DynamicAgent):
 
     else:  # minimize for other team
         if (not gameState.getAgentState(agent).isPacman) and (gameState.getAgentPosition(agent) is tuple):  # minimize for ghosts
-            actions = gameState.getLegalActions(agent)
-            actions = self.removeStopFromActions(actions)
+            #actions = gameState.getLegalActions(agent)
+            #actions = self.removeStopFromActions(actions)
+            actions = self.getMinimumOrderedActions(gameState,agent)
             min_score = float('inf')
             for action in actions:
                 successor = self.getSuccessor(gameState, action)
@@ -419,20 +424,26 @@ class SwitchAgent(DynamicAgent):
 
         else:  # ignore Pacman agents
             if gameState.getAgentPosition(agent) is tuple:
-                actions = gameState.getLegalActions(agent)
-                actions = self.removeStopFromActions(actions)
+                #actions = gameState.getLegalActions(agent)
+                #actions = self.removeStopFromActions(actions)
+                actions = self.getOrderedActions(gameState)
                 avg_score = 0
                 for action in actions:
+                    actionPos = gameState.getAgentPosition(self.index)
+                    self.debugDraw(actionPos,[0.0, 1.0, 0.0],True)
                     successor = self.getSuccessor(gameState, action)
                     score = self.alpha_beta((agent + 1) % gameState.getNumAgents(), depth, successor, alpha, beta)
                     avg_score += score
                 return avg_score / len(actions)
             
             else:  # ghost is scared or has just died
-                actions = gameState.getLegalActions(self.index)
-                actions = self.removeStopFromActions(actions)
+                #actions = gameState.getLegalActions(self.index)
+                #actions = self.removeStopFromActions(actions)
+                actions = self.getOrderedActions(gameState)
                 max_score = -float('inf')
                 for action in actions:
+                    actionPos = gameState.getAgentPosition(self.index)
+                    self.debugDraw(actionPos,[0.0, 1.0, 0.0],True)
                     successor = self.getSuccessor(gameState, action)
                     score = self.alpha_beta((self.index + 1) % gameState.getNumAgents(), depth+1, successor, alpha, beta)
                     max_score = max(max_score, score)
@@ -514,6 +525,29 @@ class SwitchAgent(DynamicAgent):
                     max_score = max(max_score, score)
 
                 return max_score
+            
+  def getMinimumOrderedActions(self, gameState, agent):
+    actions = gameState.getLegalActions(agent)
+    pacmanPosition = gameState.getAgentPosition(self.index)
+    pacmanDistances = {action: [agent.getMazeDistance(\
+       agent.getSuccessorPosition(gameState,action), pacmanPosition)] for \
+        action in actions}
+    orderedActions = sorted(actions, key=lambda action: pacmanDistances[action])
+    return orderedActions
+
+  def getOrderedActions(self, gameState):
+    actions = gameState.getLegalActions(self.index)
+    foodPositions = self.getFood(gameState).asList()
+    foodDistances = {action: min([self.getMazeDistance(\
+       self.getSuccessorPosition(gameState,action), food) for food in \
+        foodPositions]) for action in actions}
+    orderedActions = sorted(actions, key=lambda action: foodDistances[action])
+    return orderedActions
+  
+  
+  def getSuccessorPosition(self, gameState, action):
+     successor = self.getSuccessor(gameState,action)
+     return successor.getAgentPosition(self.index)
             
 
   
