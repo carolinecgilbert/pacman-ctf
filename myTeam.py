@@ -505,10 +505,15 @@ class SwitchAgent(DynamicAgent):
   def getOrderedActions(self, gameState):
     actions = gameState.getLegalActions(self.index)
     foodPositions = self.getFood(gameState).asList()
-    foodDistances = {action: min([self.getMazeDistance(\
-       self.getSuccessorPosition(gameState,action), food) for food in \
-        foodPositions]) for action in actions}
-    orderedActions = sorted(actions, key=lambda action: foodDistances[action])
+    if len(foodPositions)>0:
+      actionDistances = {action: min([self.getMazeDistance(\
+        self.getSuccessorPosition(gameState,action), food) for food in \
+          foodPositions]) for action in actions}
+    else:
+       actionDistances = {action: min([self.getMazeDistance(\
+        self.getSuccessorPosition(gameState,action), \
+          self.findHomeBase(gameState))]) for action in actions}
+    orderedActions = sorted(actions, key=lambda action: actionDistances[action])
     return orderedActions
   
   
@@ -739,5 +744,3 @@ class SwitchAgent(DynamicAgent):
      else:
         return True
 
-
-  
