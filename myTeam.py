@@ -40,6 +40,8 @@ def createTeam(firstIndex, secondIndex, isRed,
 
 DEPTH = int(11) # adversarial search tree depth
 
+BOTH_ARE_DEFENSE = False
+
 class DynamicAgent(CaptureAgent):
   """
   Parent class for multi agent search agents
@@ -75,10 +77,8 @@ class DynamicAgent(CaptureAgent):
     defensiveIndex = min(indices)
     offensiveIndex = max(indices)
 
-    self.isDefense = self.index==defensiveIndex or self.index==offensiveIndex
+    self.isDefense = self.index==defensiveIndex
     self.isOffense = self.index==offensiveIndex
-
-    self.BOTH_ARE_DEFENSE = True
 
   def returnToHome(self, gameState, pointPercentage):
      '''Go back to home side if carrying certain percentage of pellets'''
@@ -274,12 +274,7 @@ class DynamicAgent(CaptureAgent):
 class SwitchAgent(DynamicAgent):
 
   def chooseAction(self, gameState):
-    # Check offense or defense
-    if (self.isDefense):
-      return self.chooseActionDefensiveBehaviour(gameState)
-    
-    else:
-      self.chooseActionIsOffense(gameState)
+    return self.chooseActionDefensiveBehaviour(gameState)
 
   def chooseActionIsOffense(self, gameState):
      # Expectimax/Alpha-beta offense for pacman
@@ -587,7 +582,7 @@ class SwitchAgent(DynamicAgent):
 
       existingFoodPositions = self.getFoodYouAreDefending(gameState).asList()
 
-      if not self.BOTH_ARE_DEFENSE or should_guard_everything_even_though_we_are_two:
+      if not BOTH_ARE_DEFENSE or should_guard_everything_even_though_we_are_two:
         if len(existingFoodPositions) > 0:
           food_y_coordinates = [coord[1] for coord in existingFoodPositions]
           max_y = min(max(food_y_coordinates), gameState.data.layout.height - 5)
@@ -645,24 +640,23 @@ class SwitchAgent(DynamicAgent):
 
 
   def chooseActionDefensiveBehaviour(self, gameState):
-      startTime = time.time()
-
       enemies = [gameState.getAgentState(i) for i in self.getOpponents(gameState)]
       invaders = [enemy.getPosition() for enemy in enemies if enemy.isPacman]
       seenInvaders = [enemy.getPosition() for enemy in enemies if enemy.isPacman and enemy.getPosition() != None]
-      seenGhosts = [enemy.getPosition() for enemy in enemies if not enemy.isPacman and enemy.getPosition() != None]
       foodEaten = list(set(self.previouselyExistingFood) - set(self.getFoodYouAreDefending(gameState).asList()))
+
+      global BOTH_ARE_DEFENSE 
 
       """ ------------------- Behavior Tree ------------------- """
       if gameState.getAgentState(self.index).scaredTimer > 0:
-        # If scared, invade!
-        #if not self.checkForLead(gameState) or self.isOffense:
           return self.chooseActionIsOffense(gameState)
            
-
       # We are losing, one attack
       if self.isOffense and not self.checkForLead(gameState):
-         return self.chooseActionIsOffense(gameState)
+        BOTH_ARE_DEFENSE = False
+        return self.chooseActionIsOffense(gameState)
+      elif self.isOffense and self.checkForLead(gameState):
+        BOTH_ARE_DEFENSE = True
       
       # We are under attack, defend
       #if (len(invaders) > 0 and self.isDefense) or (len(invaders) > 1 and self.isOffense):
@@ -671,7 +665,7 @@ class SwitchAgent(DynamicAgent):
           if self.currentMission != "CHASE":
             self.currentMission = "CHASE"
             self.currentMissionCounter = 0
-          if self.BOTH_ARE_DEFENSE and self.isOffense and len(seenInvaders) >= 2:
+          if BOTH_ARE_DEFENSE and self.isOffense and len(seenInvaders) >= 2:
             self.pointToGoTo = seenInvaders[1]
           else:
             self.pointToGoTo = seenInvaders[0]
@@ -690,19 +684,16 @@ class SwitchAgent(DynamicAgent):
                 self.currentMissionCounter = 0
               capsules = self.getCapsulesYouAreDefending(gameState)
               capsules.sort(key=lambda x: abs(x[0] - self.middleX))
-              if self.BOTH_ARE_DEFENSE and self.isOffense and len(capsules) >= 2:
+              if BOTH_ARE_DEFENSE and self.isOffense and len(capsules) >= 2:
                 self.pointToGoTo = capsules[1]
               
-              elif self.BOTH_ARE_DEFENSE and self.isOffense and len(capsules) == 1:
+              elif BOTH_ARE_DEFENSE and self.isOffense and len(capsules) == 1:
                 if self.currentMission != "PATROL" or \
                     gameState.getAgentPosition(self.index) == self.pointToGoTo: # No need for both to guard the same capsule -> guard food
-                  #self.patrolFood(gameState, should_guard_everything_even_though_we_are_two=True)
                     return self.chooseActionIsOffense(gameState)
                   
-
               else:
                 self.pointToGoTo = capsules[0]
-              
 
             elif self.currentMission != "PATROL" or  gameState.getAgentPosition(self.index) == self.pointToGoTo: # Invader exists, is not visible, capsule don't exist -> guard food
               self.patrolFood(gameState, )
@@ -724,6 +715,3 @@ class SwitchAgent(DynamicAgent):
           return False
      else:
         return True
-     
-
-  
