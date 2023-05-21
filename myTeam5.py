@@ -310,7 +310,7 @@ class ApproximateQLearningAgent(CaptureAgent):
     CaptureAgent.final(self, state)
 
     #if self.episodesSoFar == self.numTraining:
-    print("myWeights: ", self.weights)
+    #print("myWeights: ", self.weights)
     file = open('myWeights.txt', 'w')
     file.write(str(self.weights))
 
